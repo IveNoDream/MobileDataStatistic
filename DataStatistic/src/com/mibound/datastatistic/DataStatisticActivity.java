@@ -1,6 +1,7 @@
 package com.mibound.datastatistic;
 
 import java.text.DecimalFormat;
+import java.util.ArrayList;
 import java.util.List;
 
 import android.R.integer;
@@ -16,9 +17,14 @@ import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.TrafficStats;
 import android.os.Bundle;
+import android.provider.ContactsContract.DataUsageFeedback;
 import android.telephony.TelephonyManager;
+import android.text.format.Formatter;
 import android.text.style.UpdateAppearance;
 import android.util.Log;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.widget.Button;
 
 public class DataStatisticActivity extends Activity {
 
@@ -29,15 +35,28 @@ public class DataStatisticActivity extends Activity {
 	private static final int TYPE_WIFI = 1;
 	private static final int TYPE_MOBILE = 2;
 	private static final int TYPE_NULL = -1;
+	
+	private Button mRefrush;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_data_statistic);
-
-		// getTotal();
-		registerBroadcast();
-
+		mRefrush = (Button) findViewById(R.id.btn_refrush);
+		mRefrush.setOnClickListener(new OnClickListener() {
+			
+			@Override
+			public void onClick(View arg0) {
+				// TODO Auto-generated method stub
+				List<AppItem> items = getTotalItems();
+				for (int i = 0; i < items.size(); i++) {
+					Log.i(TAG, "Name: " + items.get(i).getName() + "Usage: " + Formatter.formatFileSize(DataStatisticActivity.this,items.get(i).getUsage()));
+				}
+			}
+		});
+		//getTotal();
+		// registerBroadcast();
+		// Log.i(TAG, "total: " + Formatter.formatFileSize(this, 1024));
 	}
 
 	private void registerBroadcast() {
@@ -48,38 +67,14 @@ public class DataStatisticActivity extends Activity {
 		registerReceiver(receiver, filter);
 	}
 
-	private void getByTrafficStats() {
-		/** 获取手机通过 2G/3G 接收的字节流量总数 */
-		long mobilerxbytes = TrafficStats.getMobileRxBytes();
-		/** 获取手机通过 2G/3G 接收的数据包总数 */
-		long mobilerxpackets = TrafficStats.getMobileRxPackets();
-		/** 获取手机通过 2G/3G 发出的字节流量总数 */
-		long mobiletxbytes = TrafficStats.getMobileTxBytes();
-		/** 获取手机通过 2G/3G 发出的数据包总数 */
-		long mobiletxpackets = TrafficStats.getMobileTxPackets();
-		/** 获取手机通过所有网络方式接收的字节流量总数(包括 wifi) */
-		long totalrxbytes = TrafficStats.getTotalRxBytes();
-		/** 获取手机通过所有网络方式接收的数据包总数(包括 wifi) */
-		long totalrxpackets = TrafficStats.getTotalRxPackets();
-		/** 获取手机通过所有网络方式发送的字节流量总数(包括 wifi) */
-		long totaltxbytes = TrafficStats.getTotalTxBytes();
-		/** 获取手机通过所有网络方式发送的数据包总数(包括 wifi) */
-		long totaltxpackets = TrafficStats.getTotalTxPackets();
-		/** 获取手机指定 UID 对应的应程序用通过所有网络方式接收的字节流量总数(包括 wifi) */
-		// TrafficStats.getUidRxBytes(uid);
-		/** 获取手机指定 UID 对应的应用程序通过所有网络方式发送的字节流量总数(包括 wifi) */
-		// TrafficStats.getUidTxBytes(uid);
-
-		Log.i(TAG, "mobilerxbytes " + mobilerxbytes + "mobilerxpackets: "
-				+ mobilerxpackets + "mobiletxbytes: " + mobiletxbytes);
-	}
-
-	private void getTotal() {
+	private List<AppItem> getTotal() {
+		List<AppItem> items = new ArrayList<AppItem>();
 		// 1.获取一个包管理器。
 		PackageManager pm = getPackageManager();
 		// 2.遍历手机操作系统 获取所有的应用程序的uid
 		List<ApplicationInfo> appliactaionInfos = pm
 				.getInstalledApplications(0);
+		AppItemDbHelper helper = new AppItemDbHelper(this);
 		for (ApplicationInfo applicationInfo : appliactaionInfos) {
 			int uid = applicationInfo.uid; // 获得软件uid
 			String label = (String) pm.getApplicationLabel(applicationInfo);
@@ -99,12 +94,20 @@ public class DataStatisticActivity extends Activity {
 			if (permission != null) {
 				for (int i = 0; i < permission.length; i++) {
 					if (permission[i].equals("android.permission.INTERNET")) {
-
-						Log.i(TAG, "Label: " + label /*
-													 * + "  Permission: " +
-													 * permission[i]
-													 */+ "  Mobile+WiFi: "
-								+ getData(tx + rx));
+						if (tx + rx > 0) {
+							Log.i(TAG, "Label: " + label /*
+														 * + "  Permission: " +
+														 * permission[i]
+														 */+ "  Total: "
+									+ Formatter.formatFileSize(this, tx + rx));
+							AppItem item = new AppItem(
+									helper.getNewestAppItemId() + 1, label,
+									String.valueOf(uid), packageName,
+									String.valueOf(System.currentTimeMillis()),
+									String.valueOf(System.currentTimeMillis()),
+									tx + rx);
+							items.add(item);
+						}
 						break;
 					}
 					// Log.i(TAG, "Label: " + label + "  Permission: " +
@@ -117,6 +120,7 @@ public class DataStatisticActivity extends Activity {
 			// Log.i(TAG, "label: " + label + " packageName: " + packageName +
 			// " up: " + tx + " down" + rx);
 		}
+		return items;
 		// TrafficStats.getMobileTxBytes();//获取手机3g/2g网络上传的总流量
 		// TrafficStats.getMobileRxBytes();//手机2g/3g下载的总流量
 
@@ -124,16 +128,53 @@ public class DataStatisticActivity extends Activity {
 		// TrafficStats.getTotalRxBytes();//手机全部网络接口 包括wifi，3g、2g下载的总流量
 	}
 
-	private String getData(long data) {
-		DecimalFormat df = new DecimalFormat("###.00");
-		if (data < 1024) {
-			return (data) + "B";
-		} else if (data >= 1024 && data < 1024 * 1024) {
-			return df.format(data / 1024.0) + "KB";
-		} else if (data >= 1024 * 1024 && data < 1024 * 1024 * 1024) {
-			return df.format(data / (1024.0 * 1024)) + "MB";
-		} else {
-			return df.format(data / (1024.0 * 1024 * 1024)) + "GB";
+	public List<AppItem> getTotalItems() {
+		AppItemDbHelper helper = new AppItemDbHelper(this);
+		List<AppItem> itemsDB = helper.getAllAppItems();
+		List<AppItem> itemCur = getTotal();
+		List<AppItem> items = new ArrayList<AppItem>();
+		for (int i = 0; i < itemCur.size(); i++) {
+			boolean flag = false;
+			for (int j = 0; j < itemsDB.size(); j++) {
+				if (itemsDB.get(i).getPackagename()
+						.equals(itemCur.get(j).getPackagename())) {
+					flag = true;
+					AppItem item = new AppItem(itemsDB.get(j).getId(), itemsDB
+							.get(j).getName(), itemsDB.get(j).getUid(), itemsDB
+							.get(j).getPackagename(), itemsDB.get(j)
+							.getStarttime(), itemsDB.get(j).getStoptime(),itemsDB.get(j).getUsage()
+							+ itemCur.get(i).getUsage());
+					items.add(item);
+					break;
+				}
+			}
+			if (!flag) {
+				items.add(itemCur.get(i));
+			}
+		}
+		return items;
+	}
+
+	public void updateToAppItemDB(List<AppItem> items) {
+		AppItemDbHelper helper = new AppItemDbHelper(this);
+		for (int i = 0; i < items.size(); i++) {
+			if (!helper.isAppExist(items.get(i).getPackagename())) {
+				helper.updateAppItem(items.get(i));
+			} else {
+				helper.addAppItem(items.get(i));
+			}
+		}
+	}
+
+	public void saveToAppItemDB(String name, String uid, String packagename,
+			String starttime, String stoptime, long usage) {
+		AppItemDbHelper helper = new AppItemDbHelper(this);
+		helper.addAppItem(new AppItem(helper.getNewestAppItemId() + 1, name,
+				uid, packagename, starttime, stoptime, usage));
+		List<AppItem> items = helper.getAllAppItems();
+		for (int i = 0; i < items.size(); i++) {
+			Log.i(TAG, "name: " + items.get(i).getName() + "usage: "
+					+ items.get(i).getUsage());
 		}
 	}
 
@@ -145,7 +186,7 @@ public class DataStatisticActivity extends Activity {
 			switch (intent.getAction()) {
 			case CONNECTIVITY_CHANGED:
 				Log.i(TAG, "CONNECTIVITY_CHANGED:---> " + checkNetworkType());
-				
+
 				break;
 			case SHUT_DOWN:
 				Log.i(TAG, "SHUT_DOWN");
@@ -168,6 +209,7 @@ public class DataStatisticActivity extends Activity {
 		// 检查网络连接
 		NetworkInfo info = mConnectivity.getActiveNetworkInfo();
 		if (null == info) {
+			Log.i(TAG, "null == info");
 			return TYPE_NULL;
 		}
 		int netType = info.getType();
@@ -177,6 +219,7 @@ public class DataStatisticActivity extends Activity {
 			if (info.isConnected()) {
 				return TYPE_WIFI;
 			} else {
+				Log.i(TAG, "wifi null");
 				return TYPE_NULL;
 			}
 		} else if (netType == ConnectivityManager.TYPE_MOBILE
@@ -185,34 +228,12 @@ public class DataStatisticActivity extends Activity {
 			if (info.isConnected()) {
 				return TYPE_MOBILE;
 			} else {
+				Log.i(TAG, "mobile null");
 				return TYPE_NULL;
 			}
 		} else {
+			Log.i(TAG, "no internet");
 			return TYPE_NULL;
-		}
-	}
-
-	private boolean isMobileTypeAvailable(Context context) {
-		ConnectivityManager mConnectivityManager = (ConnectivityManager) context
-				.getSystemService(Context.CONNECTIVITY_SERVICE);
-		NetworkInfo mMobileNetworkInfo = mConnectivityManager
-				.getNetworkInfo(ConnectivityManager.TYPE_MOBILE); // 获取移动网络信息
-		if (mMobileNetworkInfo != null) {
-			return mMobileNetworkInfo.isAvailable(); // getState()方法是查询是否连接了数据网络
-		} else {
-			return false;
-		}
-	}
-
-	private boolean isWiFiTypeAvailable(Context context) {
-		ConnectivityManager mConnectivityManager = (ConnectivityManager) context
-				.getSystemService(Context.CONNECTIVITY_SERVICE);
-		NetworkInfo mWiFiNetworkInfo = mConnectivityManager
-				.getNetworkInfo(ConnectivityManager.TYPE_WIFI); // 获取移动网络信息
-		if (mWiFiNetworkInfo != null) {
-			return mWiFiNetworkInfo.isAvailable(); // getState()方法是查询是否连接了数据网络
-		} else {
-			return false;
 		}
 	}
 }
