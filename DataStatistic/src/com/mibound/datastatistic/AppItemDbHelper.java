@@ -163,7 +163,7 @@ public class AppItemDbHelper extends SQLiteOpenHelper {
 		values.put(APP_STOP_TIME, appItem.getStoptime());
 		values.put(APP_DATA_USAGE, appItem.getUsage());
 
-		return db.update(APP_TABLE_NAME, values, APP_ID + "=?",
+		return db.update(APP_TABLE_NAME, values, APP_PACKAGE + "=?",
 				new String[] { String.valueOf(appItem.getId()) });
 	}
 

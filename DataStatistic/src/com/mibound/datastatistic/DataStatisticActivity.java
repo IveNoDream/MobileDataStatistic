@@ -37,28 +37,64 @@ public class DataStatisticActivity extends Activity {
 	private static final int TYPE_NULL = -1;
 	
 	private Button mRefrush;
+	private Button mRead;
+	private Button mWrite;
+	private Button mClear;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_data_statistic);
 		mRefrush = (Button) findViewById(R.id.btn_refrush);
-		mRefrush.setOnClickListener(new OnClickListener() {
-			
-			@Override
-			public void onClick(View arg0) {
-				// TODO Auto-generated method stub
-				List<AppItem> items = getTotalItems();
-				for (int i = 0; i < items.size(); i++) {
-					Log.i(TAG, "Name: " + items.get(i).getName() + "Usage: " + Formatter.formatFileSize(DataStatisticActivity.this,items.get(i).getUsage()));
-				}
-			}
-		});
+		mRefrush.setOnClickListener(listener);
+		mRead = (Button) findViewById(R.id.btn_read);
+		mRead.setOnClickListener(listener);
+		mWrite = (Button) findViewById(R.id.btn_write);
+		mWrite.setOnClickListener(listener);
+		mClear = (Button) findViewById(R.id.btn_clear);
+		mClear.setOnClickListener(listener);
 		//getTotal();
 		// registerBroadcast();
 		// Log.i(TAG, "total: " + Formatter.formatFileSize(this, 1024));
 	}
 
+	public OnClickListener listener = new OnClickListener() {
+		
+		@Override
+		public void onClick(View v) {
+			// TODO Auto-generated method stub
+			switch (v.getId()) {
+			case R.id.btn_refrush:
+				List<AppItem> items = getTotalItems();
+				for (int i = 0; i < items.size(); i++) {
+					Log.i(TAG, "Name: " + items.get(i).getName() + "Usage: " + Formatter.formatFileSize(DataStatisticActivity.this,items.get(i).getUsage()));
+				}
+				break;
+			case R.id.btn_read:
+				AppItemDbHelper helper = new AppItemDbHelper(DataStatisticActivity.this);
+				List<AppItem> itemsDB = helper.getAllAppItems();
+				if (itemsDB.size() <= 0) {
+					Log.i(TAG, "DB NULL");
+				}else{
+				for (int i = 0; i < itemsDB.size(); i++) {
+					Log.i(TAG, "Name: " + itemsDB.get(i).getName() + "Usage: " + Formatter.formatFileSize(DataStatisticActivity.this,itemsDB.get(i).getUsage()));
+				}}
+				break;
+			case R.id.btn_write:
+				List<AppItem> itemsTotal = getTotalItems();
+				updateToAppItemDB(itemsTotal);
+				break;
+			case R.id.btn_clear:
+				AppItemDbHelper helperclear = new AppItemDbHelper(DataStatisticActivity.this);
+				helperclear.deleteAllAppItems();
+				break;
+
+			default:
+				break;
+			}
+		}
+	};
+	
 	private void registerBroadcast() {
 		IntentFilter filter = new IntentFilter();
 		filter.addAction(CONNECTIVITY_CHANGED);
@@ -158,10 +194,12 @@ public class DataStatisticActivity extends Activity {
 	public void updateToAppItemDB(List<AppItem> items) {
 		AppItemDbHelper helper = new AppItemDbHelper(this);
 		for (int i = 0; i < items.size(); i++) {
-			if (!helper.isAppExist(items.get(i).getPackagename())) {
+			if (helper.isAppExist(items.get(i).getPackagename())) {
 				helper.updateAppItem(items.get(i));
+				Log.i(TAG, "DB update");
 			} else {
 				helper.addAppItem(items.get(i));
+				Log.i(TAG, "DB Add");
 			}
 		}
 	}
