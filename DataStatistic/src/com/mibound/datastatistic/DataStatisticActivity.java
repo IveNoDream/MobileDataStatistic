@@ -1,10 +1,8 @@
 package com.mibound.datastatistic;
 
-import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.List;
 
-import android.R.integer;
 import android.app.Activity;
 import android.content.BroadcastReceiver;
 import android.content.Context;
@@ -17,10 +15,8 @@ import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.TrafficStats;
 import android.os.Bundle;
-import android.provider.ContactsContract.DataUsageFeedback;
 import android.telephony.TelephonyManager;
 import android.text.format.Formatter;
-import android.text.style.UpdateAppearance;
 import android.util.Log;
 import android.view.View;
 import android.view.View.OnClickListener;
@@ -40,6 +36,7 @@ public class DataStatisticActivity extends Activity {
 	private Button mRead;
 	private Button mWrite;
 	private Button mClear;
+	private Button mDataType;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -53,8 +50,10 @@ public class DataStatisticActivity extends Activity {
 		mWrite.setOnClickListener(listener);
 		mClear = (Button) findViewById(R.id.btn_clear);
 		mClear.setOnClickListener(listener);
+		mDataType = (Button) findViewById(R.id.btn_data_type);
+		mDataType.setOnClickListener(listener);
 		//getTotal();
-		// registerBroadcast();
+		registerBroadcast();
 		// Log.i(TAG, "total: " + Formatter.formatFileSize(this, 1024));
 	}
 
@@ -88,6 +87,10 @@ public class DataStatisticActivity extends Activity {
 				AppItemDbHelper helperclear = new AppItemDbHelper(DataStatisticActivity.this);
 				helperclear.deleteAllAppItems();
 				break;
+			case R.id.btn_data_type:
+				int type = checkNetworkType();
+				Log.i(TAG, "TYPE: " + type);
+				break;
 
 			default:
 				break;
@@ -97,7 +100,7 @@ public class DataStatisticActivity extends Activity {
 	
 	private void registerBroadcast() {
 		IntentFilter filter = new IntentFilter();
-		filter.addAction(CONNECTIVITY_CHANGED);
+		//filter.addAction(CONNECTIVITY_CHANGED);
 		filter.addAction(BOOT_COMPLETED);
 		filter.addAction(SHUT_DOWN);
 		registerReceiver(receiver, filter);
@@ -124,9 +127,8 @@ public class DataStatisticActivity extends Activity {
 				e.printStackTrace();
 			}
 			// proc/uid_stat/10086
-			long tx = TrafficStats.getUidTxBytes(uid);// 发送的 上传的流量byte
-			long rx = TrafficStats.getUidRxBytes(uid);// 下载的流量 byte
-			// 方法返回值 -1 代表的是应用程序没有产生流量 或者操作系统不支持流量统计
+			long tx = TrafficStats.getUidTxBytes(uid);
+			long rx = TrafficStats.getUidRxBytes(uid);
 			if (permission != null) {
 				for (int i = 0; i < permission.length; i++) {
 					if (permission[i].equals("android.permission.INTERNET")) {
@@ -172,8 +174,8 @@ public class DataStatisticActivity extends Activity {
 		for (int i = 0; i < itemCur.size(); i++) {
 			boolean flag = false;
 			for (int j = 0; j < itemsDB.size(); j++) {
-				if (itemsDB.get(i).getPackagename()
-						.equals(itemCur.get(j).getPackagename())) {
+				if (itemsDB.get(j).getPackagename()
+						.equals(itemCur.get(i).getPackagename())) {
 					flag = true;
 					AppItem item = new AppItem(itemsDB.get(j).getId(), itemsDB
 							.get(j).getName(), itemsDB.get(j).getUid(), itemsDB
@@ -222,12 +224,21 @@ public class DataStatisticActivity extends Activity {
 		public void onReceive(Context context, Intent intent) {
 			// TODO Auto-generated method stub
 			switch (intent.getAction()) {
-			case CONNECTIVITY_CHANGED:
-				Log.i(TAG, "CONNECTIVITY_CHANGED:---> " + checkNetworkType());
-
-				break;
+			//case CONNECTIVITY_CHANGED:
+			//	Log.i(TAG, "CONNECTIVITY_CHANGED:---> " + checkNetworkType());
+//
+			//	break;
 			case SHUT_DOWN:
 				Log.i(TAG, "SHUT_DOWN");
+				new Thread(new Runnable() {
+					
+					@Override
+					public void run() {
+						// TODO Auto-generated method stub
+						List<AppItem> itemsTotal = getTotalItems();
+						updateToAppItemDB(itemsTotal);
+					}
+				}).start();
 				break;
 			case BOOT_COMPLETED:
 				Log.i(TAG, "BOOT_COMPLETED");
@@ -239,7 +250,7 @@ public class DataStatisticActivity extends Activity {
 		}
 
 	};
-
+	
 	private int checkNetworkType() {
 		ConnectivityManager mConnectivity = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
 		TelephonyManager mTelephony = (TelephonyManager) this
@@ -260,9 +271,7 @@ public class DataStatisticActivity extends Activity {
 				Log.i(TAG, "wifi null");
 				return TYPE_NULL;
 			}
-		} else if (netType == ConnectivityManager.TYPE_MOBILE
-				&& netSubtype == TelephonyManager.NETWORK_TYPE_UMTS
-				&& !mTelephony.isNetworkRoaming()) { // MOBILE
+		} else if (netType == ConnectivityManager.TYPE_MOBILE) { // MOBILE
 			if (info.isConnected()) {
 				return TYPE_MOBILE;
 			} else {
